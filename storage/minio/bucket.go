@@ -3,6 +3,8 @@ package storage
 import (
 	"bytes"
 	"io"
+	"net/url"
+	"time"
 
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/minio/minio-go/v7"
@@ -296,4 +298,51 @@ func (b *bucket) StatObject(ctx request.ReqContext, objectName string) (storage.
 		Size:         info.Size,
 		ContentType:  info.ContentType,
 	}, nil
+}
+
+func (b *bucket) PresignedGetObject(ctx request.ReqContext, objectName string, expiry time.Duration) (string, error) {
+    b.mu.RLock()
+    defer b.mu.RUnlock()
+
+    if b.isDeleted {
+        return "", consts.ErrBucketDeleted
+    }
+
+    reqParams := make(url.Values)
+
+    presignedURL, err := b.cl.PresignedGetObject(
+        ctx.Context(), 
+        b.name, 
+        objectName, 
+        expiry, 
+        reqParams,
+    )
+    
+    if err != nil {
+        return "", errorUtil.Convert(err)
+    }
+
+    return presignedURL.String(), nil
+}
+
+func (b *bucket) PresignedPutObject(ctx request.ReqContext, objectName string, expiry time.Duration) (string, error) {
+    b.mu.RLock()
+    defer b.mu.RUnlock()
+
+    if b.isDeleted {
+        return "", consts.ErrBucketDeleted
+    }
+
+    presignedURL, err := b.cl.PresignedPutObject(
+        ctx.Context(),
+        b.name,
+        objectName,
+        expiry,
+    )
+    
+    if err != nil {
+        return "", errorUtil.Convert(err)
+    }
+
+    return presignedURL.String(), nil
 }
