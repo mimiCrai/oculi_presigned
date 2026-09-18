@@ -301,48 +301,48 @@ func (b *bucket) StatObject(ctx request.ReqContext, objectName string) (storage.
 }
 
 func (b *bucket) PresignedGetObject(ctx request.ReqContext, objectName string, expiry time.Duration) (string, error) {
-    b.mu.RLock()
-    defer b.mu.RUnlock()
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 
-    if b.isDeleted {
-        return "", consts.ErrBucketDeleted
-    }
+	if b.isDeleted {
+		return "", consts.ErrBucketDeleted
+	}
 
-    reqParams := make(url.Values)
+	reqParams := make(url.Values)
 
-    presignedURL, err := b.cl.PresignedGetObject(
-        ctx.Context(), 
-        b.name, 
-        objectName, 
-        expiry, 
-        reqParams,
-    )
-    
-    if err != nil {
-        return "", errorUtil.Convert(err)
-    }
+	presignedURL, err := b.signer.PresignedGetObject(
+		ctx.Context(),
+		b.name,
+		objectName,
+		expiry,
+		reqParams,
+	)
 
-    return presignedURL.String(), nil
+	if err != nil {
+		return "", errorUtil.Convert(err)
+	}
+
+	return presignedURL.String(), nil
 }
 
 func (b *bucket) PresignedPutObject(ctx request.ReqContext, objectName string, expiry time.Duration) (string, error) {
-    b.mu.RLock()
-    defer b.mu.RUnlock()
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 
-    if b.isDeleted {
-        return "", consts.ErrBucketDeleted
-    }
+	if b.isDeleted {
+		return "", consts.ErrBucketDeleted
+	}
 
-    presignedURL, err := b.cl.PresignedPutObject(
-        ctx.Context(),
-        b.name,
-        objectName,
-        expiry,
-    )
-    
-    if err != nil {
-        return "", errorUtil.Convert(err)
-    }
+	presignedURL, err := b.signer.PresignedPutObject(
+		ctx.Context(),
+		b.name,
+		objectName,
+		expiry,
+	)
 
-    return presignedURL.String(), nil
+	if err != nil {
+		return "", errorUtil.Convert(err)
+	}
+
+	return presignedURL.String(), nil
 }

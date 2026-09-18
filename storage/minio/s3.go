@@ -9,15 +9,37 @@ import (
 )
 
 func New(endpoint, username, password string, useSSL bool) (storage.S3, error) {
-	client, err := minio.New(endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(username, password, ""),
-		Secure: useSSL,
-	})
+	return NewWithPublicEndpoint(endpoint, endpoint, username, password, useSSL, useSSL, "us-east-1")
+}
+
+// NewWithPublicEndpoint signs browser URLs with the public host while keeping
+// storage operations on the endpoint reachable by the backend.
+func NewWithPublicEndpoint(endpoint, publicEndpoint, username, password string, useSSL, publicUseSSL bool, region string) (storage.S3, error) {
+	if region == "" {
+		region = "us-east-1"
+	}
+	newClient := func(address string, secure bool) (*minio.Client, error) {
+		return minio.New(address, &minio.Options{Creds: credentials.NewStaticV4(username, password, ""), Secure: secure, Region: region, BucketLookup: minio.BucketLookupPath})
+	}
+	client, err := newClient(endpoint, useSSL)
 	if err != nil {
 		return nil, err
 	}
+	if publicEndpoint == "" {
+		publicEndpoint = endpoint
+		publicUseSSL = useSSL
+	}
+	signer := client
+	if publicEndpoint != endpoint || publicUseSSL != useSSL {
+		signer, err = newClient(publicEndpoint, publicUseSSL)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return &impl{
 		cl:      client,
+		signer:  signer,
+		region:  region,
 		buckets: make(map[string]storage.Bucket),
 	}, nil
 }
@@ -66,13 +88,14 @@ func (i *impl) InitBucket(bucketName string) (storage.Bucket, error) {
 	}
 
 	if !exists {
-		err := i.cl.MakeBucket(context.Background(), bucketName, minio.MakeBucketOptions{})
+		err := i.cl.MakeBucket(context.Background(), bucketName, minio.MakeBucketOptions{Region: i.region})
 		if err != nil {
 			return nil, err
 		}
 	}
 	i.buckets[bucketName] = &bucket{
 		cl:        i.cl,
+		signer:    i.signer,
 		name:      bucketName,
 		parent:    i,
 		isDeleted: false,
